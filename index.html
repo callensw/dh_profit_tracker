@@ -330,7 +330,7 @@
     <script>
         const SUPABASE_URL = 'https://tkrbhzznspepehbyimry.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrcmJoenpuc3BlcGVoYnlpbXJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NjIwNzYsImV4cCI6MjA4NDUzODA3Nn0.zQwtpmkjYNdKPIMNlL3v1uVfn9hQS-SBjg3p64W_mlI';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const categories = {
             income: ['Bridal - Bride', 'Bridal Party', 'Bridal Trial & Wedding Guest', 'Prom & Pageant', 'Family & Lifestyle', 'Headshots', 'Tips', 'Other Income'],
@@ -342,7 +342,7 @@
         document.addEventListener('DOMContentLoaded', async () => {
             setupAuthListeners();
             setupEventListeners();
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { session } } = await db.auth.getSession();
             if (session) { currentUser = session.user; showApp(); await loadTransactions(); }
         });
 
@@ -361,7 +361,7 @@
                 e.preventDefault();
                 const btn = document.getElementById('loginBtn');
                 btn.disabled = true; btn.innerHTML = '<span class="loading-spinner"></span>'; hideAuthMessages();
-                const { data, error } = await supabase.auth.signInWithPassword({ email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value });
+                const { data, error } = await db.auth.signInWithPassword({ email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value });
                 btn.disabled = false; btn.textContent = 'Sign In';
                 if (error) showAuthError(error.message);
                 else { currentUser = data.user; showApp(); await loadTransactions(); }
@@ -372,7 +372,7 @@
                 btn.disabled = true; btn.innerHTML = '<span class="loading-spinner"></span>'; hideAuthMessages();
                 const password = document.getElementById('signupPassword').value;
                 if (password !== document.getElementById('signupPasswordConfirm').value) { showAuthError('Passwords do not match'); btn.disabled = false; btn.textContent = 'Create Account'; return; }
-                const { data, error } = await supabase.auth.signUp({ email: document.getElementById('signupEmail').value, password });
+                const { data, error } = await db.auth.signUp({ email: document.getElementById('signupEmail').value, password });
                 btn.disabled = false; btn.textContent = 'Create Account';
                 if (error) showAuthError(error.message);
                 else if (data.user && !data.session) showAuthSuccess('Check your email for a confirmation link!');
@@ -384,8 +384,8 @@
         function showAuthSuccess(msg) { const el = document.getElementById('authSuccess'); el.textContent = msg; el.classList.add('show'); }
         function hideAuthMessages() { document.getElementById('authError').classList.remove('show'); document.getElementById('authSuccess').classList.remove('show'); }
         function showApp() { document.getElementById('authContainer').style.display = 'none'; document.getElementById('appContainer').classList.add('show'); document.getElementById('userEmail').textContent = currentUser.email; setDefaultDate(); updateCategoryOptions(); }
-        async function signOut() { await supabase.auth.signOut(); currentUser = null; transactions = []; document.getElementById('authContainer').style.display = 'flex'; document.getElementById('appContainer').classList.remove('show'); }
-        async function loadTransactions() { const { data } = await supabase.from('transactions').select('*').order('date', { ascending: false }); transactions = data || []; renderAll(); }
+        async function signOut() { await db.auth.signOut(); currentUser = null; transactions = []; document.getElementById('authContainer').style.display = 'flex'; document.getElementById('appContainer').classList.remove('show'); }
+        async function loadTransactions() { const { data } = await db.from('transactions').select('*').order('date', { ascending: false }); transactions = data || []; renderAll(); }
 
         function setupEventListeners() {
             document.querySelectorAll('.type-btn').forEach(btn => btn.addEventListener('click', () => { document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); currentType = btn.dataset.type; updateCategoryOptions(); }));
@@ -459,13 +459,13 @@
             const form = document.getElementById('transactionForm'); if (!form.checkValidity()) { form.reportValidity(); return; }
             const btn = document.getElementById('saveBtn'); btn.disabled = true; btn.innerHTML = '<span class="loading-spinner"></span>';
             const data = { user_id: currentUser.id, type: currentType, date: document.getElementById('date').value, amount: parseFloat(document.getElementById('amount').value), category: document.getElementById('category').value, description: document.getElementById('description').value, notes: document.getElementById('notes').value || null };
-            let error; if (editingId) { const r = await supabase.from('transactions').update(data).eq('id', editingId); error = r.error; } else { const r = await supabase.from('transactions').insert([data]); error = r.error; }
+            let error; if (editingId) { const r = await db.from('transactions').update(data).eq('id', editingId); error = r.error; } else { const r = await db.from('transactions').insert([data]); error = r.error; }
             btn.disabled = false; btn.textContent = 'Save Transaction';
             if (error) { alert('Error saving transaction.'); return; }
             await loadTransactions(); closeModal();
         }
 
-        async function deleteTransaction(id) { if (!confirm('Delete this transaction?')) return; await supabase.from('transactions').delete().eq('id', id); await loadTransactions(); }
+        async function deleteTransaction(id) { if (!confirm('Delete this transaction?')) return; await db.from('transactions').delete().eq('id', id); await loadTransactions(); }
 
         function exportCSV() {
             const csv = ['Date,Type,Category,Description,Amount,Notes', ...transactions.map(t => [t.date, t.type, t.category, `"${t.description.replace(/"/g, '""')}"`, t.amount, `"${(t.notes || '').replace(/"/g, '""')}"`].join(','))].join('\n');
@@ -478,7 +478,7 @@
             reader.onload = async (ev) => {
                 const lines = ev.target.result.split('\n').slice(1), newT = [];
                 lines.forEach(line => { if (!line.trim()) return; const p = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g); if (p && p.length >= 5) { const t = { user_id: currentUser.id, date: p[0].replace(/"/g, ''), type: p[1].replace(/"/g, '').toLowerCase(), category: p[2].replace(/"/g, ''), description: p[3].replace(/"/g, ''), amount: parseFloat(p[4]), notes: p[5] ? p[5].replace(/"/g, '') : null }; if (t.date && !isNaN(t.amount)) newT.push(t); } });
-                if (newT.length) { await supabase.from('transactions').insert(newT); alert(`Imported ${newT.length} transactions!`); await loadTransactions(); }
+                if (newT.length) { await db.from('transactions').insert(newT); alert(`Imported ${newT.length} transactions!`); await loadTransactions(); }
                 e.target.value = '';
             };
             reader.readAsText(file);
