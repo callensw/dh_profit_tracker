@@ -247,6 +247,11 @@
                     <div class="summary-label">Net Profit</div>
                     <div class="summary-value" id="netProfit">$0.00</div>
                 </div>
+                <div class="summary-card" style="border-left: 4px solid var(--accent-rose);">
+                    <div class="summary-label">Expense Ratio</div>
+                    <div class="summary-value" id="expenseRatio">0%</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Lower is leaner</div>
+                </div>
             </div>
             <div class="content-grid">
                 <div>
@@ -328,8 +333,8 @@
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const categories = {
-            income: ['Product Sales', 'Custom Orders', 'Shipping Charged', 'Tips', 'Other Income'],
-            expense: ['Supplies & Materials', 'Packaging', 'Shipping Costs', 'Platform/Transaction Fees', 'Marketing & Ads', 'Tools & Equipment', 'Software/Subscriptions', 'Other Expenses']
+            income: ['Bridal - Bride', 'Bridal Party', 'Bridal Trial & Wedding Guest', 'Prom & Pageant', 'Family & Lifestyle', 'Headshots', 'Tips', 'Other Income'],
+            expense: ['Makeup', 'Brushes', 'Skincare', 'Gas', 'Platform/Transaction Fees', 'Marketing & Ads', 'Software/Subscriptions', 'Other Expenses']
         };
 
         let transactions = [], currentType = 'income', currentFilter = 'all', editingId = null, profitChart = null, currentUser = null;
@@ -410,8 +415,10 @@
             const f = filterTransactions();
             const inc = f.filter(t => t.type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0);
             const exp = f.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
+            const expenseRatio = inc > 0 ? Math.round((exp / inc) * 100) : 0;
             document.getElementById('totalIncome').textContent = formatCurrency(inc);
             document.getElementById('totalExpenses').textContent = formatCurrency(exp);
+            document.getElementById('expenseRatio').textContent = expenseRatio + '%';
             const pe = document.getElementById('netProfit'); pe.textContent = formatCurrency(inc - exp); pe.className = 'summary-value ' + (inc - exp >= 0 ? 'positive' : 'negative');
         }
 
@@ -425,7 +432,9 @@
             const c = document.getElementById('pnlStatement'), f = filterTransactions(), ibc = {}, ebc = {};
             f.forEach(t => { if (t.type === 'income') ibc[t.category] = (ibc[t.category] || 0) + parseFloat(t.amount); else ebc[t.category] = (ebc[t.category] || 0) + parseFloat(t.amount); });
             const ti = Object.values(ibc).reduce((a, b) => a + b, 0), te = Object.values(ebc).reduce((a, b) => a + b, 0);
-            c.innerHTML = `<div class="pnl-section"><div class="pnl-section-title">Revenue</div>${Object.entries(ibc).map(([k, v]) => `<div class="pnl-row"><span class="pnl-category">${escapeHtml(k)}</span><span class="pnl-amount income">${formatCurrency(v)}</span></div>`).join('') || '<div class="pnl-row"><span class="pnl-category" style="color:var(--text-muted)">No income recorded</span></div>'}<div class="pnl-row total"><span>Total Revenue</span><span class="pnl-amount income">${formatCurrency(ti)}</span></div></div><div class="pnl-section"><div class="pnl-section-title">Expenses</div>${Object.entries(ebc).map(([k, v]) => `<div class="pnl-row"><span class="pnl-category">${escapeHtml(k)}</span><span class="pnl-amount expense">${formatCurrency(v)}</span></div>`).join('') || '<div class="pnl-row"><span class="pnl-category" style="color:var(--text-muted)">No expenses recorded</span></div>'}<div class="pnl-row total"><span>Total Expenses</span><span class="pnl-amount expense">${formatCurrency(te)}</span></div></div><div class="pnl-section"><div class="pnl-row net-profit"><span>Net Profit</span><span class="pnl-amount ${ti - te >= 0 ? 'income' : 'expense'}">${formatCurrency(ti - te)}</span></div></div>`;
+            const incomeWithPct = Object.entries(ibc).map(([k, v]) => ({ cat: k, amt: v, pct: ti > 0 ? Math.round((v / ti) * 100) : 0 })).sort((a, b) => b.amt - a.amt);
+            const expenseWithPct = Object.entries(ebc).map(([k, v]) => ({ cat: k, amt: v, pct: te > 0 ? Math.round((v / te) * 100) : 0 })).sort((a, b) => b.amt - a.amt);
+            c.innerHTML = `<div class="pnl-section"><div class="pnl-section-title">Revenue by Service</div>${incomeWithPct.map(x => `<div class="pnl-row"><span class="pnl-category">${escapeHtml(x.cat)} <span style="color:var(--income-green);font-weight:600">${x.pct}%</span></span><span class="pnl-amount income">${formatCurrency(x.amt)}</span></div>`).join('') || '<div class="pnl-row"><span class="pnl-category" style="color:var(--text-muted)">No income recorded</span></div>'}<div class="pnl-row total"><span>Total Revenue</span><span class="pnl-amount income">${formatCurrency(ti)}</span></div></div><div class="pnl-section"><div class="pnl-section-title">Expenses by Category</div>${expenseWithPct.map(x => `<div class="pnl-row"><span class="pnl-category">${escapeHtml(x.cat)} <span style="color:var(--expense-rose);font-weight:600">${x.pct}%</span></span><span class="pnl-amount expense">${formatCurrency(x.amt)}</span></div>`).join('') || '<div class="pnl-row"><span class="pnl-category" style="color:var(--text-muted)">No expenses recorded</span></div>'}<div class="pnl-row total"><span>Total Expenses</span><span class="pnl-amount expense">${formatCurrency(te)}</span></div></div><div class="pnl-section"><div class="pnl-row net-profit"><span>Net Profit</span><span class="pnl-amount ${ti - te >= 0 ? 'income' : 'expense'}">${formatCurrency(ti - te)}</span></div></div>`;
         }
 
         function renderChart() {
